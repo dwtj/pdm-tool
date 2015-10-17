@@ -15,6 +15,21 @@ pub struct Task {
     succ: HashSet<String>,
 }
 
+impl Task {
+    pub fn new(id: String, duration: u32) -> Task {
+        Task {
+            id: id,
+            early_start: 0,
+            early_finish: 0,
+            late_start: 0,
+            late_finish: 0,
+            duration: duration,
+            pred: HashSet::new(),
+            succ: HashSet::new(),
+        }
+    }
+}
+
 
 /// Parses a single line of input and adds it to the map.
 ///
@@ -37,17 +52,7 @@ pub fn add_entry(line: &str, map: &mut HashMap<String, Task>) {
     };
 
     let id = split[0].to_string();
-
-    let mut task = Task {
-        id: id.to_string(),
-        early_start: 0,
-        early_finish: 0,
-        late_start: 0,
-        late_finish: 0,
-        duration: duration,
-        pred: HashSet::new(),
-        succ: HashSet::new(),
-    };
+    let mut task = Task::new(id.to_string(), duration);
 
     // step 2: for all dependencies, make sure they exist
     //         (i.e. the predecessors already exists)
