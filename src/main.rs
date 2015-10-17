@@ -3,6 +3,10 @@ use std::io;
 use std::io::prelude::*;
 
 
+pub static START_ID: &'static str = "_START";
+pub static END_ID:   &'static str = "_END";
+
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct Task {
     id: String,
@@ -69,12 +73,38 @@ pub fn add_entry(line: &str, map: &mut HashMap<String, Task>) {
 }
 
 
+pub fn add_start(map: &mut HashMap<String, Task>) {
+    let mut start = Task::new(START_ID.to_string(), 0);
+    for (id, task) in map.iter_mut() {
+        if task.pred.is_empty() {
+            task.pred.insert((&start.id).to_string());
+            start.succ.insert((&id).to_string());
+        }
+    }
+    map.insert(START_ID.to_string(), start);
+}
+
+
+pub fn add_end(map: &mut HashMap<String, Task>) {
+    let mut end = Task::new(END_ID.to_string(), 0);
+    for (id, task) in map.iter_mut() {
+        if task.succ.is_empty() {
+            task.succ.insert((&end.id).to_string());
+            end.pred.insert((&id).to_string());
+        }
+    }
+    map.insert(END_ID.to_string(), end);
+}
+
+
 pub fn main() {
     let mut map: HashMap<String, Task> = HashMap::new();
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
         add_entry(&line.unwrap(), &mut map);
     }
+    add_start(&mut map);
+    add_end(&mut map);
 }
 
 #[cfg(test)]
@@ -213,5 +243,31 @@ mod tests {
         assert!(e.pred.contains("B"));
 
         assert_eq!(map.len(), 3);
+    }
+
+    #[test]
+    fn test_add_start() {
+        let mut map: HashMap<String, Task> = HashMap::new();
+        add_entry("A,2", &mut map);
+        add_start(&mut map);
+        let start = map.get(START_ID).unwrap();
+        let task = map.get("A").unwrap();
+        assert_eq!(start.succ.len(), 1);
+        assert!(start.succ.contains("A"));
+        assert_eq!(task.pred.len(), 1);
+        assert!(task.pred.contains(START_ID));
+    }
+
+    #[test]
+    fn test_add_end() {
+        let mut map: HashMap<String, Task> = HashMap::new();
+        add_entry("A,2", &mut map);
+        add_end(&mut map);
+        let task = map.get("A").unwrap();
+        let end = map.get(END_ID).unwrap();
+        assert_eq!(task.succ.len(), 1);
+        assert!(task.succ.contains(END_ID));
+        assert_eq!(end.pred.len(), 1);
+        assert!(end.pred.contains("A"));
     }
 }
