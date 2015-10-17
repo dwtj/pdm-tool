@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::io::prelude::*;
+use std::u32;
 
 
 pub const START_ID: &'static str = "_START";
@@ -25,8 +26,8 @@ impl Task {
             id: id,
             early_start: 0,
             early_finish: 0,
-            late_start: 0,
-            late_finish: 0,
+            late_start: u32::MAX,
+            late_finish: u32::MAX,
             duration: duration,
             pred: HashSet::new(),
             succ: HashSet::new(),
@@ -100,6 +101,7 @@ pub fn add_end(map: &mut HashMap<String, Task>) {
 pub fn propagate_forward(map: &mut HashMap<String,Task>) {
     let mut worklist: VecDeque<String> = VecDeque::new();
     worklist.push_back(String::from(START_ID));
+    map.get_mut(START_ID).unwrap().early_start = 0;
 
     while !worklist.is_empty() {
         let cur_id = &worklist.pop_front().unwrap();
@@ -112,7 +114,7 @@ pub fn propagate_forward(map: &mut HashMap<String,Task>) {
                 worklist.push_back(s.to_string());
             }
 
-            // `early_start` for `cur` by finding the maximum `early_finish` of its predecessors.
+            // Find `early_start` for `cur` by finding the maximum `early_finish` of its preds.
             early_start = 0;
             for p_id in cur.pred.iter() {
                 let p = map.get(p_id).unwrap();
@@ -126,6 +128,47 @@ pub fn propagate_forward(map: &mut HashMap<String,Task>) {
         let mut cur = map.get_mut(cur_id).unwrap();
         cur.early_start = early_start;
         cur.early_finish = early_start + cur.duration;
+    }
+}
+
+
+pub fn propagate_backward(map: &mut HashMap<String,Task>) {
+    let mut worklist: VecDeque<String> = VecDeque::new();
+    {
+        // Initialize the end node, and add each predecessor of `end` to the work list.
+        let end = map.get_mut(END_ID).unwrap();
+        end.early_finish = end.early_start;
+        end.late_start = end.early_start;
+        end.late_finish = end.early_start;
+        for p in end.pred.iter() {
+            worklist.push_back(p.to_string());
+        }
+    }
+    while !worklist.is_empty() {
+        let cur_id = &worklist.pop_front().unwrap();
+        let mut late_finish;
+        {
+            let cur = map.get(cur_id).unwrap();
+
+            // Add each predecessor to work list.
+            for s in cur.pred.iter() {
+                worklist.push_back(s.to_string());
+            }
+
+            // Find `late_finish` for `cur` by finding the minimum `late_start` of its succs.
+            late_finish = u32::MAX;
+            for s_id in cur.succ.iter() {
+                let s = map.get(s_id).unwrap();
+                if s.late_start < late_finish {
+                    late_finish = s.late_start;
+                }
+            }
+        }
+
+        // Get a mut reference to `cur` and update it.
+        let mut cur = map.get_mut(cur_id).unwrap();
+        cur.late_finish = late_finish;
+        cur.late_start = late_finish - cur.duration;
     }
 }
 
@@ -146,6 +189,7 @@ mod tests {
     use super::*;
 
     use std::collections::{HashMap};
+    use std::u32;
 
     const MEDIUM_TEST_INPUT: [&'static str; 12] = [
         "A,2",
@@ -179,6 +223,57 @@ mod tests {
         (END_ID, 12),
     ];
 
+    const MEDIUM_TEST_EXPECTED_EARLY_FINISH: [(&'static str, u32); 14] = [
+        (START_ID, 0),
+        ("A", 2),
+        ("B", 3),
+        ("C", 2),
+        ("D", 5),
+        ("E", 5),
+        ("F", 4),
+        ("G", 6),
+        ("H", 7),
+        ("I", 8),
+        ("J", 9),
+        ("K", 10),
+        ("L", 12),
+        (END_ID, 12),
+    ];
+
+    const MEDIUM_TEST_EXPECTED_LATE_FINISH: [(&'static str, u32); 14] = [
+        (START_ID, 0),
+        ("A", 2),
+        ("B", 4),
+        ("C", 7),
+        ("D", 5),
+        ("E", 9),
+        ("F", 5),
+        ("G", 9),
+        ("H", 12),
+        ("I", 8),
+        ("J", 12),
+        ("K", 10),
+        ("L", 12),
+        (END_ID, 12),
+    ];
+
+    const MEDIUM_TEST_EXPECTED_LATE_START: [(&'static str, u32); 14] = [
+        (START_ID, 0),
+        ("A", 0),
+        ("B", 1),
+        ("C", 5),
+        ("D", 2),
+        ("E", 7),
+        ("F", 4),
+        ("G", 5),
+        ("H", 7),
+        ("I", 5),
+        ("J", 9),
+        ("K", 8),
+        ("L", 10),
+        (END_ID, 12),
+    ];
+
     #[test]
     fn test_single_ok() {
         let mut map: HashMap<String, Task> = HashMap::new();
@@ -188,8 +283,8 @@ mod tests {
         assert_eq!(e.id, "A".to_string());
         assert_eq!(e.early_start, 0);
         assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, 0);
-        assert_eq!(e.late_finish, 0);
+        assert_eq!(e.late_start, u32::MAX);
+        assert_eq!(e.late_finish, u32::MAX);
         assert_eq!(e.duration, 2);
         assert_eq!(e.pred.len(), 0);
         assert_eq!(e.succ.len(), 0);
@@ -249,8 +344,8 @@ mod tests {
         assert_eq!(e.id, "A".to_string());
         assert_eq!(e.early_start, 0);
         assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, 0);
-        assert_eq!(e.late_finish, 0);
+        assert_eq!(e.late_start, u32::MAX);
+        assert_eq!(e.late_finish, u32::MAX);
         assert_eq!(e.duration, 2);
         assert_eq!(e.pred.len(), 0);
         assert_eq!(e.succ.len(), 0);
@@ -259,8 +354,8 @@ mod tests {
         assert_eq!(e.id, "B".to_string());
         assert_eq!(e.early_start, 0);
         assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, 0);
-        assert_eq!(e.late_finish, 0);
+        assert_eq!(e.late_start, u32::MAX);
+        assert_eq!(e.late_finish, u32::MAX);
         assert_eq!(e.duration, 1);
         assert_eq!(e.pred.len(), 0);
         assert_eq!(e.succ.len(), 0);
@@ -279,8 +374,8 @@ mod tests {
         assert_eq!(e.id, "A".to_string());
         assert_eq!(e.early_start, 0);
         assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, 0);
-        assert_eq!(e.late_finish, 0);
+        assert_eq!(e.late_start, u32::MAX);
+        assert_eq!(e.late_finish, u32::MAX);
         assert_eq!(e.duration, 2);
         assert_eq!(e.pred.len(), 0);
         assert_eq!(e.succ.len(), 2);
@@ -291,8 +386,8 @@ mod tests {
         assert_eq!(e.id, "B".to_string());
         assert_eq!(e.early_start, 0);
         assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, 0);
-        assert_eq!(e.late_finish, 0);
+        assert_eq!(e.late_start, u32::MAX);
+        assert_eq!(e.late_finish, u32::MAX);
         assert_eq!(e.duration, 1);
         assert_eq!(e.pred.len(), 1);
         assert_eq!(e.succ.len(), 1);
@@ -303,8 +398,8 @@ mod tests {
         assert_eq!(e.id, "C".to_string());
         assert_eq!(e.early_start, 0);
         assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, 0);
-        assert_eq!(e.late_finish, 0);
+        assert_eq!(e.late_start, u32::MAX);
+        assert_eq!(e.late_finish, u32::MAX);
         assert_eq!(e.duration, 3);
         assert_eq!(e.pred.len(), 2);
         assert_eq!(e.succ.len(), 0);
@@ -356,6 +451,38 @@ mod tests {
             let (id, expected) = *elem;
             let task = map.get(id).unwrap();
             assert!(task.early_start == expected, id);
+        }
+
+        for elem in MEDIUM_TEST_EXPECTED_EARLY_FINISH.iter() {
+            let (id, expected) = *elem;
+            let task = map.get(id).unwrap();
+            assert!(task.early_finish == expected, id);
+        }
+    }
+
+    #[test]
+    fn test_medium_propagate_backward() {
+        let mut map: HashMap<String, Task> = HashMap::new();
+        for line in MEDIUM_TEST_INPUT.iter() {
+            add_entry(line, &mut map);
+        }
+        add_start(&mut map);
+        add_end(&mut map);
+        assert_eq!(map.len(), MEDIUM_TEST_INPUT.len() + 2);
+
+        propagate_forward(&mut map);
+        propagate_backward(&mut map);
+
+        for elem in MEDIUM_TEST_EXPECTED_LATE_START.iter() {
+            let (id, expected) = *elem;
+            let task = map.get(id).unwrap();
+            assert!(task.late_start == expected, id);
+        }
+
+        for elem in MEDIUM_TEST_EXPECTED_LATE_FINISH.iter() {
+            let (id, expected) = *elem;
+            let task = map.get(id).unwrap();
+            assert!(task.late_finish == expected, id);
         }
     }
 }
