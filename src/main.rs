@@ -1,10 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::io::prelude::*;
 
 
-pub static START_ID: &'static str = "_START";
-pub static END_ID:   &'static str = "_END";
+pub const START_ID: &'static str = "_START";
+pub const END_ID:   &'static str = "_END";
 
 
 #[derive(Debug, Eq, PartialEq)]
@@ -97,6 +97,39 @@ pub fn add_end(map: &mut HashMap<String, Task>) {
 }
 
 
+pub fn propagate_forward(map: &mut HashMap<String,Task>) {
+    let mut worklist: VecDeque<String> = VecDeque::new();
+    worklist.push_back(String::from(START_ID));
+
+    while !worklist.is_empty() {
+        let cur_id = &worklist.pop_front().unwrap();
+        let mut early_start;
+        {
+            let cur = map.get(cur_id).unwrap();
+
+            // Add each successor to work list.
+            for s in cur.succ.iter() {
+                worklist.push_back(s.to_string());
+            }
+
+            // `early_start` for `cur` by finding the maximum `early_finish` of its predecessors.
+            early_start = 0;
+            for p_id in cur.pred.iter() {
+                let p = map.get(p_id).unwrap();
+                if p.early_finish > early_start {
+                    early_start = p.early_finish;
+                }
+            }
+        }
+
+        // Get a mut reference to `cur` and update it.
+        let mut cur = map.get_mut(cur_id).unwrap();
+        cur.early_start = early_start;
+        cur.early_finish = early_start + cur.duration;
+    }
+}
+
+
 pub fn main() {
     let mut map: HashMap<String, Task> = HashMap::new();
     let stdin = io::stdin();
@@ -107,16 +140,50 @@ pub fn main() {
     add_end(&mut map);
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use std::collections::{HashMap};
 
+    const MEDIUM_TEST_INPUT: [&'static str; 12] = [
+        "A,2",
+        "B,3",
+        "C,2",
+        "D,3,A",
+        "E,2,B,C",
+        "F,1,A,B",
+        "G,4,A",
+        "H,5,C",
+        "I,3,D,F",
+        "J,3,E,G",
+        "K,2,I",
+        "L,2,K"
+    ];
+
+    const MEDIUM_TEST_EXPECTED_EARLY_START: [(&'static str, u32); 14] = [
+        (START_ID, 0),
+        ("A", 0),
+        ("B", 0),
+        ("C", 0),
+        ("D", 2),
+        ("E", 3),
+        ("F", 3),
+        ("G", 2),
+        ("H", 2),
+        ("I", 5),
+        ("J", 6),
+        ("K", 8),
+        ("L", 10),
+        (END_ID, 12),
+    ];
+
     #[test]
     fn test_single_ok() {
         let mut map: HashMap<String, Task> = HashMap::new();
         add_entry("A,2", &mut map);
+
         let e = map.get("A").unwrap();
         assert_eq!(e.id, "A".to_string());
         assert_eq!(e.early_start, 0);
@@ -177,6 +244,7 @@ mod tests {
         let mut map: HashMap<String, Task> = HashMap::new();
         add_entry("A,2", &mut map);
         add_entry("B,1", &mut map);
+
         let e = map.get("A").unwrap();
         assert_eq!(e.id, "A".to_string());
         assert_eq!(e.early_start, 0);
@@ -206,6 +274,7 @@ mod tests {
         add_entry("A,2", &mut map);
         add_entry("B,1,A", &mut map);
         add_entry("C,3,A,B", &mut map);
+
         let e = map.get("A").unwrap();
         assert_eq!(e.id, "A".to_string());
         assert_eq!(e.early_start, 0);
@@ -269,5 +338,24 @@ mod tests {
         assert!(task.succ.contains(END_ID));
         assert_eq!(end.pred.len(), 1);
         assert!(end.pred.contains("A"));
+    }
+
+    #[test]
+    fn test_medium_propagate_forward() {
+        let mut map: HashMap<String, Task> = HashMap::new();
+        for line in MEDIUM_TEST_INPUT.iter() {
+            add_entry(line, &mut map);
+        }
+        add_start(&mut map);
+        add_end(&mut map);
+        assert_eq!(map.len(), MEDIUM_TEST_INPUT.len() + 2);
+
+        propagate_forward(&mut map);
+
+        for elem in MEDIUM_TEST_EXPECTED_EARLY_START.iter() {
+            let (id, expected) = *elem;
+            let task = map.get(id).unwrap();
+            assert!(task.early_start == expected, id);
+        }
     }
 }
