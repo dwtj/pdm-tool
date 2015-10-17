@@ -33,6 +33,10 @@ impl Task {
             succ: HashSet::new(),
         }
     }
+
+    pub fn is_critical(&self) -> bool {
+        self.early_start == self.late_start && self.early_finish == self.late_finish
+    }
 }
 
 
@@ -173,6 +177,17 @@ pub fn propagate_backward(map: &mut HashMap<String,Task>) {
 }
 
 
+pub fn get_critical_tasks(map: &HashMap<String, Task>) -> Vec<String> {
+    let mut vec = Vec::new();
+    for (id, task) in map {
+        if task.is_critical() {
+            vec.push(id.to_string());
+        }
+    }
+    vec
+}
+
+
 pub fn main() {
     let mut map: HashMap<String, Task> = HashMap::new();
     let stdin = io::stdin();
@@ -272,6 +287,16 @@ mod tests {
         ("K", 8),
         ("L", 10),
         (END_ID, 12),
+    ];
+
+    const MEDIUM_TEST_EXPECTED_CRITICAL_TASKS: [&'static str; 7] = [
+        START_ID,
+        "A",
+        "D",
+        "I",
+        "K",
+        "L",
+        END_ID,
     ];
 
     #[test]
@@ -484,5 +509,34 @@ mod tests {
             let task = map.get(id).unwrap();
             assert!(task.late_finish == expected, id);
         }
+    }
+
+    #[test]
+    fn test_medium_get_critical_tasks() {
+        let mut map: HashMap<String, Task> = HashMap::new();
+        for line in MEDIUM_TEST_INPUT.iter() {
+            add_entry(line, &mut map);
+        }
+        add_start(&mut map);
+        add_end(&mut map);
+        assert_eq!(map.len(), MEDIUM_TEST_INPUT.len() + 2);
+
+        propagate_forward(&mut map);
+        propagate_backward(&mut map);
+        let actual = get_critical_tasks(&map);
+        assert_eq!(actual.len(), MEDIUM_TEST_EXPECTED_CRITICAL_TASKS.len());
+        for expected_id in MEDIUM_TEST_EXPECTED_CRITICAL_TASKS.iter() {
+            assert!(includes_str(&actual, expected_id), "Didn't find expected {:?} in actual {:?}",
+                                                        expected_id, actual);
+        }
+    }
+
+    fn includes_str(vec: &Vec<String>, target: &str) -> bool {
+        for elem in vec.iter() {
+            if *elem == *target {
+                return true;
+            }
+        }
+        false
     }
 }
