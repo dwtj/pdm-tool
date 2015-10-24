@@ -1,5 +1,5 @@
 [package]
-name = "hw4"
+name = "pdm-tool"
 version = "0.1.0"
 authors = ["David Johnston <dwtj@iastate.edu>",
            "Nik Kinkel <nskinkel@iastate.edu>"]
