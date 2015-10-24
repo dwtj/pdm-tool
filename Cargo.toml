@@ -1,4 +1,5 @@
 [package]
 name = "hw4"
 version = "0.1.0"
-authors = ["David Johnston <dwtj@iastate.edu>"]
+authors = ["David Johnston <dwtj@iastate.edu>",
+           "Nik Kinkel <nskinkel@iastate.edu>"]
