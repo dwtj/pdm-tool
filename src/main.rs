@@ -1,9 +1,13 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::io;
+use std::env;
+use std::fs::File;
+use std::io::BufReader;
 use std::io::prelude::*;
+use std::path::Path;
 use std::rc::{Rc};
 use std::u32;
+
 
 pub const START_ID: &'static str = "_START";
 pub const END_ID:   &'static str = "_END";
@@ -180,11 +184,17 @@ pub fn get_critical_tasks(map: &RCTaskMap)
 }
 
 pub fn main() {
+
+    let args: Vec<String> = env::args().collect();
+    assert!(args.len() == 2, "Usage: ./pdm-tool filename");
     let mut map: RCTaskMap = HashMap::new();
-    let stdin = io::stdin();
-    for line in stdin.lock().lines() {
+
+    let file = File::open(Path::new(&args[1])).unwrap();
+    let reader = BufReader::new(file);
+    for line in reader.lines() {
         add_entry(&line.unwrap(), &mut map);
     }
+
     add_start(&mut map);
     add_end(&mut map);
     propagate_forward(&mut map);
