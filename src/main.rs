@@ -9,8 +9,8 @@ use std::rc::{Rc};
 use std::u32;
 
 
-pub const START_ID: &'static str = "_START";
-pub const END_ID:   &'static str = "_END";
+pub const START_ID: &'static str = "START";
+pub const END_ID:   &'static str = "END";
 
 #[derive(Debug, Eq)]
 pub struct Task {
@@ -183,6 +183,27 @@ pub fn get_critical_tasks(map: &RCTaskMap)
        .collect()
 }
 
+// print the output for the assignment. Format is:
+//    - Node,
+// (ES, EF, LS, LF)
+// Critical path: You need to compute the critical paths and display them
+pub fn display(m: &RCTaskMap) {
+    
+    println!("Node,ES,EF,LS,LF");
+    for node in m.values() {
+        println!("{:?},{:?},{:?},{:?},{:?}", node.borrow().id,
+                                             node.borrow().early_start,
+                                             node.borrow().early_finish,
+                                             node.borrow().late_start,
+                                             node.borrow().late_finish);
+    }
+    print!("\nCritical Path: ");
+    for t in get_critical_tasks(m) {
+        print!("{:?},", t);
+    }
+    println!("");
+}
+
 pub fn main() {
 
     let args: Vec<String> = env::args().collect();
@@ -199,6 +220,7 @@ pub fn main() {
     add_end(&mut map);
     propagate_forward(&mut map);
     propagate_backward(&mut map);
+    display(&map);
 }
 
 
