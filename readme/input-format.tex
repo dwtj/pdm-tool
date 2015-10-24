@@ -1,0 +1,13 @@
+\chapter{Input Format}
+
+\section{pdm-tool Input}
+
+pdm-tool expects input as CSV files. In particular, a CSV input file
+should be lines of the following form:
+
+\begin{lstlisting}[language=python,frame=single,showstringspaces=false]
+TaskID,Duration,Dep1,Dep2,...,DepN
+\end{lstlisting}
+
+where TaskID is the task identifier, Duration is the task duration, and
+Dep1...DepN are the Task's dependencies.

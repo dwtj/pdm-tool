@@ -1,0 +1,32 @@
+\chapter{Overview}
+
+\section{pdm-tool}
+
+pdm-tool is a program that, given a list of tasks, their durations, and
+their dependencies, computes the following:
+
+\begin{itemize}
+    \item Early Start (ES)
+    \item Early Finish (EF)
+    \item Late Start (LS)
+    \item Late Finish (LF)
+    \item Critical Path
+\end{itemize}
+
+\subsection{Input Validation}
+
+pdm-tool enforces the following input constraints (and \textit{only} the
+following input constraints):
+
+\begin{enumerate}
+    \item Task duration must be a non-negative integer
+    \item A Task predecessor must appear in the input stream before its
+          successor
+    \item Tasks must not have depndecy cycles
+\end{enumerate}
+
+\subsection{Algorithm}
+
+pdm-tool makes two passes: a forward pass to calculate EF and ES, and a
+backward pass to compute LF and LS. The critical path is then found by
+identifying tasks in which ES = LS and EF = LF.
