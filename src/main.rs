@@ -1,14 +1,14 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::io::prelude::*;
+use std::rc::{Rc};
 use std::u32;
-
 
 pub const START_ID: &'static str = "_START";
 pub const END_ID:   &'static str = "_END";
 
-
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq)]
 pub struct Task {
     id: String,
     early_start: u32,
@@ -16,8 +16,17 @@ pub struct Task {
     late_start: u32,
     late_finish: u32,
     duration: u32,
-    pred: HashSet<String>,
-    succ: HashSet<String>,
+    pred: Vec<RCTask>,
+    succ: Vec<RCTask>,
+}
+
+pub type RCTaskMap = HashMap<String, RCTask>;
+pub type RCTask = Rc<RefCell<Task>>;
+
+impl PartialEq for Task {
+    fn eq(&self, other: &Task) -> bool {
+        self.id == other.id
+    }
 }
 
 impl Task {
@@ -29,16 +38,30 @@ impl Task {
             late_start: u32::MAX,
             late_finish: u32::MAX,
             duration: duration,
-            pred: HashSet::new(),
-            succ: HashSet::new(),
+            pred: Vec::new(),
+            succ: Vec::new(),
         }
     }
 
+    pub fn rc_new(id: String, duration: u32) -> RCTask {
+        Rc::new(RefCell::new(Task::new(id.to_string(), duration)))
+    }
+
     pub fn is_critical(&self) -> bool {
-        self.early_start == self.late_start && self.early_finish == self.late_finish
+        self.early_start == self.late_start &&
+        self.early_finish == self.late_finish
+    }
+
+    pub fn succ_ids(&self) -> Vec<String> {
+        self.succ.iter().map(|i| i.borrow().id.to_string())
+                        .collect::<Vec<String>>()
+    }
+
+    pub fn pred_ids(&self) -> Vec<String> {
+        self.pred.iter().map(|i| i.borrow().id.to_string())
+                        .collect::<Vec<String>>()
     }
 }
-
 
 /// Parses a single line of input and adds it to the map.
 ///
@@ -47,7 +70,7 @@ impl Task {
 /// - "A" is the label for the task to be added,
 /// - "d" is some integer value for the task's duration, and
 /// - "B,C,...,N" are labels of task (already in the map) on which "A" depends.
-pub fn add_entry(line: &str, map: &mut HashMap<String, Task>) {
+pub fn add_entry(line: &str, map: &mut RCTaskMap) {
     let split: Vec<&str> = line.split(",").collect();
     assert!(split.len() >= 2, "Tasks must have both an ID and duration.");
 
@@ -61,141 +84,111 @@ pub fn add_entry(line: &str, map: &mut HashMap<String, Task>) {
     };
 
     let id = split[0].to_string();
-    let mut task = Task::new(id.to_string(), duration);
+    let task = Task::rc_new(id.to_string(), duration);
 
     // step 2: for all dependencies, make sure they exist
-    //         (i.e. the predecessors already exists)
-    for d in split[2..].iter() {
-        let mut dep_task = match map.get_mut(*d) {
+    //         (i.e. the predecessors already exist)
+    // NOTE: iteration is done over a hashset to avoid duplicate dependencies
+    for d in split[2..].iter().cloned().collect::<HashSet<&str>>().iter() {
+        let dep_task = match map.get_mut(*d) {
             Some(v) => v,
-            None => panic!("Invalid node found in dependency list."),
+            None => panic!("Invalid task in dependency list."),
         };
-        task.pred.insert(d.to_string());
-        dep_task.succ.insert(id.to_string());
+        task.borrow_mut().pred.push(dep_task.clone());
+        dep_task.borrow_mut().succ.push(task.clone());
     }
 
     map.insert(id.to_string(), task);
 }
 
-
-pub fn add_start(map: &mut HashMap<String, Task>) {
-    let mut start = Task::new(START_ID.to_string(), 0);
-    for (id, task) in map.iter_mut() {
-        if task.pred.is_empty() {
-            task.pred.insert((&start.id).to_string());
-            start.succ.insert((&id).to_string());
+pub fn add_start(map: &mut RCTaskMap) {
+    let start = Task::rc_new(START_ID.to_string(), 0);
+    for task in map.values() {
+        if task.borrow().pred.is_empty() {
+            task.borrow_mut().pred.push(start.clone());
+            start.borrow_mut().succ.push(task.clone());
         }
     }
     map.insert(START_ID.to_string(), start);
 }
 
-
-pub fn add_end(map: &mut HashMap<String, Task>) {
-    let mut end = Task::new(END_ID.to_string(), 0);
-    for (id, task) in map.iter_mut() {
-        if task.succ.is_empty() {
-            task.succ.insert((&end.id).to_string());
-            end.pred.insert((&id).to_string());
+pub fn add_end(map: &mut RCTaskMap) {
+    let end = Task::rc_new(END_ID.to_string(), 0);
+    for task in map.values() {
+        if task.borrow().succ.is_empty() {
+            task.borrow_mut().succ.push(end.clone());
+            end.borrow_mut().pred.push(task.clone());
         }
     }
     map.insert(END_ID.to_string(), end);
 }
 
 
-pub fn propagate_forward(map: &mut HashMap<String,Task>) {
+pub fn propagate_forward(map: &mut RCTaskMap) {
     let mut worklist: VecDeque<String> = VecDeque::new();
-    worklist.push_back(String::from(START_ID));
-    map.get_mut(START_ID).unwrap().early_start = 0;
+    worklist.push_back(START_ID.to_string());
 
     while !worklist.is_empty() {
-        let cur_id = &worklist.pop_front().unwrap();
-        let mut early_start;
-        {
-            let cur = map.get(cur_id).unwrap();
-
-            // Add each successor to work list.
-            for s in cur.succ.iter() {
-                worklist.push_back(s.to_string());
-            }
-
-            // Find `early_start` for `cur` by finding the maximum `early_finish` of its preds.
-            early_start = 0;
-            for p_id in cur.pred.iter() {
-                let p = map.get(p_id).unwrap();
-                if p.early_finish > early_start {
-                    early_start = p.early_finish;
-                }
-            }
-        }
-
-        // Get a mut reference to `cur` and update it.
-        let mut cur = map.get_mut(cur_id).unwrap();
-        cur.early_start = early_start;
-        cur.early_finish = early_start + cur.duration;
+        let cur = map.get_mut(&worklist.pop_front().unwrap()).unwrap();
+        // Add each successor to work list.
+        worklist.extend(cur.borrow().succ_ids());
+        // Find the max early_finish of cur's predecessors
+        let early_start = match cur.borrow().pred.iter().map(
+                                |x| x.borrow().early_finish).max() {
+            Some(v) => v,
+            None    => 0,
+        };
+        cur.borrow_mut().early_start = early_start;
+        let new_dur = early_start + cur.borrow().duration;
+        cur.borrow_mut().early_finish = new_dur;
     }
 }
 
-
-pub fn propagate_backward(map: &mut HashMap<String,Task>) {
+pub fn propagate_backward(map: &mut RCTaskMap) {
     let mut worklist: VecDeque<String> = VecDeque::new();
     {
-        // Initialize the end node, and add each predecessor of `end` to the work list.
         let end = map.get_mut(END_ID).unwrap();
-        end.early_finish = end.early_start;
-        end.late_start = end.early_start;
-        end.late_finish = end.early_start;
-        for p in end.pred.iter() {
-            worklist.push_back(p.to_string());
-        }
+        let mut t = end.borrow().early_start; end.borrow_mut().early_finish = t;
+        t = end.borrow().early_start; end.borrow_mut().late_start = t;
+        t = end.borrow().early_start; end.borrow_mut().late_finish = t;
+        worklist.extend(end.borrow().pred_ids());
     }
+
     while !worklist.is_empty() {
-        let cur_id = &worklist.pop_front().unwrap();
-        let mut late_finish;
-        {
-            let cur = map.get(cur_id).unwrap();
-
-            // Add each predecessor to work list.
-            for s in cur.pred.iter() {
-                worklist.push_back(s.to_string());
-            }
-
-            // Find `late_finish` for `cur` by finding the minimum `late_start` of its succs.
-            late_finish = u32::MAX;
-            for s_id in cur.succ.iter() {
-                let s = map.get(s_id).unwrap();
-                if s.late_start < late_finish {
-                    late_finish = s.late_start;
-                }
-            }
-        }
-
-        // Get a mut reference to `cur` and update it.
-        let mut cur = map.get_mut(cur_id).unwrap();
-        cur.late_finish = late_finish;
-        cur.late_start = late_finish - cur.duration;
+        let cur = map.get_mut(&worklist.pop_front().unwrap()).unwrap();
+        // Add each predecessor to work list.
+        worklist.extend(cur.borrow().pred_ids());
+        // Find the min late start of cur's successors
+        let late_finish = match cur.borrow().succ.iter().map(
+                                |x| x.borrow().late_start).min() {
+            Some(v) => v,
+            None    => u32::MAX,
+        };
+        cur.borrow_mut().late_finish = late_finish;
+        let new_ls = late_finish - cur.borrow().duration;
+        cur.borrow_mut().late_start = new_ls;
     }
 }
 
+pub fn get_critical_tasks(map: &RCTaskMap)
+-> Vec<String> {
 
-pub fn get_critical_tasks(map: &HashMap<String, Task>) -> Vec<String> {
-    let mut vec = Vec::new();
-    for (id, task) in map {
-        if task.is_critical() {
-            vec.push(id.to_string());
-        }
-    }
-    vec
+    map.values()
+       .filter(|i| i.borrow().is_critical())
+       .map(|i| i.borrow().id.to_string())
+       .collect()
 }
-
 
 pub fn main() {
-    let mut map: HashMap<String, Task> = HashMap::new();
+    let mut map: RCTaskMap = HashMap::new();
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
         add_entry(&line.unwrap(), &mut map);
     }
     add_start(&mut map);
     add_end(&mut map);
+    propagate_forward(&mut map);
+    propagate_backward(&mut map);
 }
 
 
@@ -301,25 +294,25 @@ mod tests {
 
     #[test]
     fn test_single_ok() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A,2", &mut map);
 
         let e = map.get("A").unwrap();
-        assert_eq!(e.id, "A".to_string());
-        assert_eq!(e.early_start, 0);
-        assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, u32::MAX);
-        assert_eq!(e.late_finish, u32::MAX);
-        assert_eq!(e.duration, 2);
-        assert_eq!(e.pred.len(), 0);
-        assert_eq!(e.succ.len(), 0);
+        assert_eq!(e.borrow().id, "A".to_string());
+        assert_eq!(e.borrow().early_start, 0);
+        assert_eq!(e.borrow().early_finish, 0);
+        assert_eq!(e.borrow().late_start, u32::MAX);
+        assert_eq!(e.borrow().late_finish, u32::MAX);
+        assert_eq!(e.borrow().duration, 2);
+        assert_eq!(e.borrow().pred.len(), 0);
+        assert_eq!(e.borrow().succ.len(), 0);
         assert_eq!(map.len(), 1);
     }
 
     #[test]
     #[should_panic]
     fn test_dup_node() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A,2", &mut map);
         add_entry("A,2", &mut map);
     }
@@ -327,142 +320,144 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_bad_dur_node() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A,B", &mut map);
     }
 
     #[test]
     #[should_panic]
     fn test_no_node() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("", &mut map);
     }
 
     #[test]
     #[should_panic]
     fn test_no_dur() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A", &mut map);
     }
 
     #[test]
     #[should_panic]
     fn test_should_exist() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A,2,B", &mut map);
     }
 
     #[test]
     #[should_panic]
     fn test_self_dep() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A,2,A", &mut map);
     }
 
     #[test]
     fn test_double_no_deps() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A,2", &mut map);
         add_entry("B,1", &mut map);
 
         let e = map.get("A").unwrap();
-        assert_eq!(e.id, "A".to_string());
-        assert_eq!(e.early_start, 0);
-        assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, u32::MAX);
-        assert_eq!(e.late_finish, u32::MAX);
-        assert_eq!(e.duration, 2);
-        assert_eq!(e.pred.len(), 0);
-        assert_eq!(e.succ.len(), 0);
+        assert_eq!(e.borrow().id, "A".to_string());
+        assert_eq!(e.borrow().early_start, 0);
+        assert_eq!(e.borrow().early_finish, 0);
+        assert_eq!(e.borrow().late_start, u32::MAX);
+        assert_eq!(e.borrow().late_finish, u32::MAX);
+        assert_eq!(e.borrow().duration, 2);
+        assert_eq!(e.borrow().pred.len(), 0);
+        assert_eq!(e.borrow().succ.len(), 0);
 
         let e = map.get("B").unwrap();
-        assert_eq!(e.id, "B".to_string());
-        assert_eq!(e.early_start, 0);
-        assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, u32::MAX);
-        assert_eq!(e.late_finish, u32::MAX);
-        assert_eq!(e.duration, 1);
-        assert_eq!(e.pred.len(), 0);
-        assert_eq!(e.succ.len(), 0);
+        assert_eq!(e.borrow().id, "B".to_string());
+        assert_eq!(e.borrow().early_start, 0);
+        assert_eq!(e.borrow().early_finish, 0);
+        assert_eq!(e.borrow().late_start, u32::MAX);
+        assert_eq!(e.borrow().late_finish, u32::MAX);
+        assert_eq!(e.borrow().duration, 1);
+        assert_eq!(e.borrow().pred.len(), 0);
+        assert_eq!(e.borrow().succ.len(), 0);
 
         assert_eq!(map.len(), 2);
     }
 
     #[test]
     fn test_three_full_deps() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A,2", &mut map);
         add_entry("B,1,A", &mut map);
         add_entry("C,3,A,B", &mut map);
 
         let e = map.get("A").unwrap();
-        assert_eq!(e.id, "A".to_string());
-        assert_eq!(e.early_start, 0);
-        assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, u32::MAX);
-        assert_eq!(e.late_finish, u32::MAX);
-        assert_eq!(e.duration, 2);
-        assert_eq!(e.pred.len(), 0);
-        assert_eq!(e.succ.len(), 2);
-        assert!(e.succ.contains("B"));
-        assert!(e.succ.contains("C"));
+        assert_eq!(e.borrow().id, "A".to_string());
+        assert_eq!(e.borrow().early_start, 0);
+        assert_eq!(e.borrow().early_finish, 0);
+        assert_eq!(e.borrow().late_start, u32::MAX);
+        assert_eq!(e.borrow().late_finish, u32::MAX);
+        assert_eq!(e.borrow().duration, 2);
+        assert_eq!(e.borrow().pred.len(), 0);
+        assert_eq!(e.borrow().succ.len(), 2);
+        let mut t = e.borrow().succ_ids();
+        t.sort();
+        assert_eq!(t, ["B", "C"]);
 
         let e = map.get("B").unwrap();
-        assert_eq!(e.id, "B".to_string());
-        assert_eq!(e.early_start, 0);
-        assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, u32::MAX);
-        assert_eq!(e.late_finish, u32::MAX);
-        assert_eq!(e.duration, 1);
-        assert_eq!(e.pred.len(), 1);
-        assert_eq!(e.succ.len(), 1);
-        assert!(e.pred.contains("A"));
-        assert!(e.succ.contains("C"));
+        assert_eq!(e.borrow().id, "B".to_string());
+        assert_eq!(e.borrow().early_start, 0);
+        assert_eq!(e.borrow().early_finish, 0);
+        assert_eq!(e.borrow().late_start, u32::MAX);
+        assert_eq!(e.borrow().late_finish, u32::MAX);
+        assert_eq!(e.borrow().duration, 1);
+        assert_eq!(e.borrow().pred.len(), 1);
+        assert_eq!(e.borrow().succ.len(), 1);
+        assert_eq!(e.borrow().pred_ids(), ["A"]);
+        assert_eq!(e.borrow().succ_ids(), ["C"]);
 
         let e = map.get("C").unwrap();
-        assert_eq!(e.id, "C".to_string());
-        assert_eq!(e.early_start, 0);
-        assert_eq!(e.early_finish, 0);
-        assert_eq!(e.late_start, u32::MAX);
-        assert_eq!(e.late_finish, u32::MAX);
-        assert_eq!(e.duration, 3);
-        assert_eq!(e.pred.len(), 2);
-        assert_eq!(e.succ.len(), 0);
-        assert!(e.pred.contains("A"));
-        assert!(e.pred.contains("B"));
+        assert_eq!(e.borrow().id, "C".to_string());
+        assert_eq!(e.borrow().early_start, 0);
+        assert_eq!(e.borrow().early_finish, 0);
+        assert_eq!(e.borrow().late_start, u32::MAX);
+        assert_eq!(e.borrow().late_finish, u32::MAX);
+        assert_eq!(e.borrow().duration, 3);
+        assert_eq!(e.borrow().pred.len(), 2);
+        assert_eq!(e.borrow().succ.len(), 0);
+        let mut t = e.borrow().pred_ids();
+        t.sort();
+        assert_eq!(t, ["A", "B"]);
 
         assert_eq!(map.len(), 3);
     }
 
     #[test]
     fn test_add_start() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A,2", &mut map);
         add_start(&mut map);
         let start = map.get(START_ID).unwrap();
         let task = map.get("A").unwrap();
-        assert_eq!(start.succ.len(), 1);
-        assert!(start.succ.contains("A"));
-        assert_eq!(task.pred.len(), 1);
-        assert!(task.pred.contains(START_ID));
+        assert_eq!(start.borrow().succ.len(), 1);
+        assert_eq!(start.borrow().succ_ids(), ["A"]);
+        assert_eq!(task.borrow().pred.len(), 1);
+        assert_eq!(task.borrow().pred_ids(), [START_ID]);
     }
 
     #[test]
     fn test_add_end() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         add_entry("A,2", &mut map);
         add_end(&mut map);
         let task = map.get("A").unwrap();
         let end = map.get(END_ID).unwrap();
-        assert_eq!(task.succ.len(), 1);
-        assert!(task.succ.contains(END_ID));
-        assert_eq!(end.pred.len(), 1);
-        assert!(end.pred.contains("A"));
+        assert_eq!(task.borrow().succ.len(), 1);
+        assert_eq!(task.borrow().succ_ids(), [END_ID]);
+        assert_eq!(end.borrow().pred.len(), 1);
+        assert_eq!(end.borrow().pred_ids(), ["A"]);
     }
 
     #[test]
     fn test_medium_propagate_forward() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         for line in MEDIUM_TEST_INPUT.iter() {
             add_entry(line, &mut map);
         }
@@ -475,19 +470,19 @@ mod tests {
         for elem in MEDIUM_TEST_EXPECTED_EARLY_START.iter() {
             let (id, expected) = *elem;
             let task = map.get(id).unwrap();
-            assert!(task.early_start == expected, id);
+            assert!(task.borrow().early_start == expected, id);
         }
 
         for elem in MEDIUM_TEST_EXPECTED_EARLY_FINISH.iter() {
             let (id, expected) = *elem;
             let task = map.get(id).unwrap();
-            assert!(task.early_finish == expected, id);
+            assert!(task.borrow().early_finish == expected, id);
         }
     }
 
     #[test]
     fn test_medium_propagate_backward() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         for line in MEDIUM_TEST_INPUT.iter() {
             add_entry(line, &mut map);
         }
@@ -501,19 +496,20 @@ mod tests {
         for elem in MEDIUM_TEST_EXPECTED_LATE_START.iter() {
             let (id, expected) = *elem;
             let task = map.get(id).unwrap();
-            assert!(task.late_start == expected, id);
+            println!("\n\nexpected: {:?}, actual: {:?}\n", expected, task.borrow().late_start);
+            assert!(task.borrow().late_start == expected, id);
         }
 
         for elem in MEDIUM_TEST_EXPECTED_LATE_FINISH.iter() {
             let (id, expected) = *elem;
             let task = map.get(id).unwrap();
-            assert!(task.late_finish == expected, id);
+            assert!(task.borrow().late_finish == expected, id);
         }
     }
 
     #[test]
     fn test_medium_get_critical_tasks() {
-        let mut map: HashMap<String, Task> = HashMap::new();
+        let mut map: RCTaskMap = HashMap::new();
         for line in MEDIUM_TEST_INPUT.iter() {
             add_entry(line, &mut map);
         }
