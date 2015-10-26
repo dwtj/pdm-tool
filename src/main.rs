@@ -75,8 +75,10 @@ impl Task {
 /// - "d" is some integer value for the task's duration, and
 /// - "B,C,...,N" are labels of task (already in the map) on which "A" depends.
 pub fn add_entry(line: &str, map: &mut RCTaskMap) {
-    let split: Vec<&str> = line.split(",").collect();
-    assert!(split.len() >= 2, "Tasks must have both an ID and duration.");
+    let split: Vec<&str> = line.split(" ").collect();
+    assert!(split.len() == 2 || split.len() == 3,
+            "Tasks must have both an ID and duration and at most one \
+             dependency list.");
 
     // step 0: id does not already exist in map
     assert!(!map.contains_key(split[0]), "Duplicate IDs are not allowed.");
@@ -90,18 +92,21 @@ pub fn add_entry(line: &str, map: &mut RCTaskMap) {
     let id = split[0].to_string();
     let task = Task::rc_new(id.to_string(), duration);
 
-    // step 2: for all dependencies, make sure they exist
-    //         (i.e. the predecessors already exist)
-    // NOTE: iteration is done over a hashset to avoid duplicate dependencies
-    for d in split[2..].iter().cloned().collect::<HashSet<&str>>().iter() {
-        let dep_task = match map.get_mut(*d) {
-            Some(v) => v,
-            None => panic!("Invalid task in dependency list."),
-        };
-        task.borrow_mut().pred.push(dep_task.clone());
-        dep_task.borrow_mut().succ.push(task.clone());
+    // if we have a dependency list, parse it and add to map
+    if split.len() == 3 {
+        // collect dependencies and remove redundancies
+        let deps: HashSet<&str> = split[2].split(",").collect(); 
+        // step 2: for all dependencies, make sure they exist
+        //         (i.e. the predecessors already exist)
+        for d in deps.iter() {
+            let dep_task = match map.get_mut(*d) {
+                Some(v) => v,
+                None => panic!("Invalid task in dependency list."),
+            };
+            task.borrow_mut().pred.push(dep_task.clone());
+            dep_task.borrow_mut().succ.push(task.clone());
+        }
     }
-
     map.insert(id.to_string(), task);
 }
 
@@ -177,10 +182,9 @@ pub fn propagate_backward(map: &mut RCTaskMap) {
 pub fn get_critical_tasks(map: &RCTaskMap)
 -> Vec<String> {
 
-    map.values()
-       .filter(|i| i.borrow().is_critical())
-       .map(|i| i.borrow().id.to_string())
-       .collect()
+    let ct = map.values().filter(|i| i.borrow().is_critical());
+    let ids = ct.map(|i| i.borrow().id.to_string());
+    ids.collect()
 }
 
 // print the output for the assignment. Format is:
@@ -232,18 +236,18 @@ mod tests {
     use std::u32;
 
     const MEDIUM_TEST_INPUT: [&'static str; 12] = [
-        "A,2",
-        "B,3",
-        "C,2",
-        "D,3,A",
-        "E,2,B,C",
-        "F,1,A,B",
-        "G,4,A",
-        "H,5,C",
-        "I,3,D,F",
-        "J,3,E,G",
-        "K,2,I",
-        "L,2,K"
+        "A 2",
+        "B 3",
+        "C 2",
+        "D 3 A",
+        "E 2 B,C",
+        "F 1 A,B",
+        "G 4 A",
+        "H 5 C",
+        "I 3 D,F",
+        "J 3 E,G",
+        "K 2 I",
+        "L 2 K"
     ];
 
     const MEDIUM_TEST_EXPECTED_EARLY_START: [(&'static str, u32); 14] = [
@@ -327,7 +331,7 @@ mod tests {
     #[test]
     fn test_single_ok() {
         let mut map: RCTaskMap = HashMap::new();
-        add_entry("A,2", &mut map);
+        add_entry("A 2", &mut map);
 
         let e = map.get("A").unwrap();
         assert_eq!(e.borrow().id, "A".to_string());
@@ -345,15 +349,15 @@ mod tests {
     #[should_panic]
     fn test_dup_node() {
         let mut map: RCTaskMap = HashMap::new();
-        add_entry("A,2", &mut map);
-        add_entry("A,2", &mut map);
+        add_entry("A 2", &mut map);
+        add_entry("A 2", &mut map);
     }
 
     #[test]
     #[should_panic]
     fn test_bad_dur_node() {
         let mut map: RCTaskMap = HashMap::new();
-        add_entry("A,B", &mut map);
+        add_entry("A B", &mut map);
     }
 
     #[test]
@@ -374,21 +378,21 @@ mod tests {
     #[should_panic]
     fn test_should_exist() {
         let mut map: RCTaskMap = HashMap::new();
-        add_entry("A,2,B", &mut map);
+        add_entry("A 2 B", &mut map);
     }
 
     #[test]
     #[should_panic]
     fn test_self_dep() {
         let mut map: RCTaskMap = HashMap::new();
-        add_entry("A,2,A", &mut map);
+        add_entry("A 2 A", &mut map);
     }
 
     #[test]
     fn test_double_no_deps() {
         let mut map: RCTaskMap = HashMap::new();
-        add_entry("A,2", &mut map);
-        add_entry("B,1", &mut map);
+        add_entry("A 2", &mut map);
+        add_entry("B 1", &mut map);
 
         let e = map.get("A").unwrap();
         assert_eq!(e.borrow().id, "A".to_string());
@@ -416,9 +420,9 @@ mod tests {
     #[test]
     fn test_three_full_deps() {
         let mut map: RCTaskMap = HashMap::new();
-        add_entry("A,2", &mut map);
-        add_entry("B,1,A", &mut map);
-        add_entry("C,3,A,B", &mut map);
+        add_entry("A 2", &mut map);
+        add_entry("B 1 A", &mut map);
+        add_entry("C 3 A,B", &mut map);
 
         let e = map.get("A").unwrap();
         assert_eq!(e.borrow().id, "A".to_string());
@@ -464,7 +468,7 @@ mod tests {
     #[test]
     fn test_add_start() {
         let mut map: RCTaskMap = HashMap::new();
-        add_entry("A,2", &mut map);
+        add_entry("A 2", &mut map);
         add_start(&mut map);
         let start = map.get(START_ID).unwrap();
         let task = map.get("A").unwrap();
@@ -477,7 +481,7 @@ mod tests {
     #[test]
     fn test_add_end() {
         let mut map: RCTaskMap = HashMap::new();
-        add_entry("A,2", &mut map);
+        add_entry("A 2", &mut map);
         add_end(&mut map);
         let task = map.get("A").unwrap();
         let end = map.get(END_ID).unwrap();
