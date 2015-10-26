@@ -184,15 +184,24 @@ pub fn get_critical_tasks(map: &RCTaskMap) -> Vec<String> {
     let mut ct: Vec<&RCTask> = map.values()
                               .filter(|i| i.borrow().is_critical())
                               .collect();
-    ct.sort_by(|a,b| {
-                        if a.borrow().early_start < b.borrow().early_start {
+    // sort tasks by early start, manually placing START at the beginning and
+    // END at the end in the event of a tie
+    ct.sort_by(|a,b| {  if a.borrow().early_start < b.borrow().early_start {
                             Ordering::Less
                         }
                         else if a.borrow().early_start > b.borrow().early_start{
                             Ordering::Greater
                         }
                         else {
-                            Ordering::Equal
+                            if a.borrow().id == "START" || b.borrow().id == "END" {
+                                Ordering::Less
+                            }
+                            else if a.borrow().id == "END" || b.borrow().id == "START" {
+                                Ordering::Greater
+                            }
+                            else {
+                                Ordering::Equal
+                            }
                         }
     });
     ct.iter().map(|i| i.borrow().id.to_string()).collect()
