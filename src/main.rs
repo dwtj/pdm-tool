@@ -205,16 +205,17 @@ pub fn get_critical_tasks(map: &RCTaskMap) -> Vec<String> {
 pub fn display(m: &RCTaskMap) {
     
     println!("Node,ES,EF,LS,LF");
+
     for node in m.values() {
-        println!("{:?},{:?},{:?},{:?},{:?}", node.borrow().id,
-                                             node.borrow().early_start,
-                                             node.borrow().early_finish,
-                                             node.borrow().late_start,
-                                             node.borrow().late_finish);
+        println!("{},{},{},{},{}", node.borrow().id,
+                                   node.borrow().early_start,
+                                   node.borrow().early_finish,
+                                   node.borrow().late_start,
+                                   node.borrow().late_finish);
     }
     print!("\nCritical Path: ");
     for t in get_critical_tasks(m) {
-        print!("{:?},", t);
+        print!("{} ", t);
     }
     println!("");
 }
