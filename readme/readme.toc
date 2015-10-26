@@ -1,15 +1,13 @@
 \contentsline {chapter}{\numberline {1}Overview}{1}{chapter.1}
 \contentsline {section}{\numberline {1.1}pdm-tool}{1}{section.1.1}
 \contentsline {subsection}{\numberline {1.1.1}Input Validation}{1}{subsection.1.1.1}
-\contentsline {subsection}{\numberline {1.1.2}Algorithm}{1}{subsection.1.1.2}
-\contentsline {chapter}{\numberline {2}Instructions}{2}{chapter.2}
-\contentsline {section}{\numberline {2.1}Building pdm-tool}{2}{section.2.1}
-\contentsline {section}{\numberline {2.2}Running pdm-tool}{2}{section.2.2}
-\contentsline {section}{\numberline {2.3}Running Our Tests}{2}{section.2.3}
-\contentsline {subsection}{\numberline {2.3.1}Using Our Test Files}{3}{subsection.2.3.1}
-\contentsline {chapter}{\numberline {3}Input Format}{4}{chapter.3}
-\contentsline {section}{\numberline {3.1}pdm-tool Input}{4}{section.3.1}
-\contentsline {chapter}{\numberline {4}Output Format}{5}{chapter.4}
-\contentsline {section}{\numberline {4.1}pdm-tool Output}{5}{section.4.1}
+\contentsline {subsection}{\numberline {1.1.2}Algorithm}{2}{subsection.1.1.2}
+\contentsline {chapter}{\numberline {2}Instructions}{3}{chapter.2}
+\contentsline {section}{\numberline {2.1}Building pdm-tool}{3}{section.2.1}
+\contentsline {section}{\numberline {2.2}Running pdm-tool}{3}{section.2.2}
+\contentsline {section}{\numberline {2.3}Running Our Tests}{3}{section.2.3}
+\contentsline {subsection}{\numberline {2.3.1}Using Our Test Files}{4}{subsection.2.3.1}
+\contentsline {chapter}{\numberline {3}Output Format}{5}{chapter.3}
+\contentsline {section}{\numberline {3.1}pdm-tool Output}{5}{section.3.1}
 \contentsline {chapter}{Appendices}{6}{section*.2}
 \contentsline {chapter}{\numberline {A}pdm-tool Sample Output}{6}{Appendix.1.A}

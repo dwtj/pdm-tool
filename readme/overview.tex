@@ -23,6 +23,9 @@ following input constraints):
     \item A Task predecessor must appear in the input stream before its
           successor.
     \item Tasks must not have dependency cycles.
+    \item Task, duration, and dependency list are space-delimited, and the
+          dependency list itself is comma-delimited.
+    \item Blank lines are not allowed.
 \end{enumerate}
 
 \subsection{Algorithm}

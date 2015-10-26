@@ -12,16 +12,17 @@ $ cargo build
 
 \section{Running pdm-tool}
 
-If you do not have Rust installed, run the following command in the
-pdm-tool directory (note: assumes an x86\_64 Linux architecture), where
+If you do not have Rust\footnote{\url{https://rust-lang.org/}} installed,
+run the following command in the
+pdm-tool directory (note: assumes an x86\_64 GNU/Linux architecture), where
 ``filename'' is the name of the input file:
 
 \begin{lstlisting}[language=bash,frame=single,showstringspaces=false]
 $ ./pdm-tool filename
 \end{lstlisting}
 
-If you have installed Rust\footnote{\url{https://www.rust-lang.org/}},
-then run the following command in the pdm-tool directory:
+If you have Rust installed, then run the following command in the pdm-tool
+directory:
 
 \begin{lstlisting}[language=bash,frame=single,showstringspaces=false]
 $ cargo run filename
@@ -39,5 +40,5 @@ $ cargo test
 \subsection{Using Our Test Files}
 
 The test files used during development are found in the ``testfiles''
-directory. To run pdm-tool with one of our test files, just use the
-filename as the first command line argument to pdm-tool.
+directory. To run pdm-tool with one of our test files, just use a
+test filename as the first command line argument to pdm-tool.
