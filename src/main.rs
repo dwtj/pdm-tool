@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::fs::File;
@@ -179,12 +180,22 @@ pub fn propagate_backward(map: &mut RCTaskMap) {
     }
 }
 
-pub fn get_critical_tasks(map: &RCTaskMap)
--> Vec<String> {
-
-    let ct = map.values().filter(|i| i.borrow().is_critical());
-    let ids = ct.map(|i| i.borrow().id.to_string());
-    ids.collect()
+pub fn get_critical_tasks(map: &RCTaskMap) -> Vec<String> {
+    let mut ct: Vec<&RCTask> = map.values()
+                              .filter(|i| i.borrow().is_critical())
+                              .collect();
+    ct.sort_by(|a,b| {
+                        if a.borrow().early_start < b.borrow().early_start {
+                            Ordering::Less
+                        }
+                        else if a.borrow().early_start > b.borrow().early_start{
+                            Ordering::Greater
+                        }
+                        else {
+                            Ordering::Equal
+                        }
+    });
+    ct.iter().map(|i| i.borrow().id.to_string()).collect()
 }
 
 // print the output for the assignment. Format is:
