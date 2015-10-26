@@ -4,7 +4,7 @@
 
 To build pdm-tool\footnote{Requires the Rust programming language:
 \url{https://www.rust-lang.org/}}, run the following command from inside the
-top-level pdm-tool directory:
+top-level src/pdm-tool directory:
 
 \begin{lstlisting}[language=bash,frame=single,showstringspaces=false]
 $ cargo build
@@ -14,14 +14,14 @@ $ cargo build
 
 If you do not have Rust\footnote{\url{https://rust-lang.org/}} installed,
 run the following command in the
-pdm-tool directory (note: assumes an x86\_64 GNU/Linux architecture), where
+src/pdm-tool directory (note: assumes an x86\_64 GNU/Linux architecture), where
 ``filename'' is the name of the input file:
 
 \begin{lstlisting}[language=bash,frame=single,showstringspaces=false]
 $ ./pdm-tool filename
 \end{lstlisting}
 
-If you have Rust installed, then run the following command in the pdm-tool
+If you have Rust installed, then run the following command in the src/pdm-tool
 directory:
 
 \begin{lstlisting}[language=bash,frame=single,showstringspaces=false]
@@ -30,7 +30,7 @@ $ cargo run filename
 
 \section{Running Our Tests}
 
-To run our unit tests, use the following command from the pdm-tool
+To run our unit tests, use the following command from the src/pdm-tool
 directory:
 
 \begin{lstlisting}[language=bash,frame=single,showstringspaces=false]
